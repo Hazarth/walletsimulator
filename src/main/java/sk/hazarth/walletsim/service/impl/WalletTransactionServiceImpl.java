@@ -21,9 +21,6 @@ public class WalletTransactionServiceImpl implements WalletTransactionService {
     @Autowired
     private WalletTransactionRepository walletTransactionRepository;
 
-    @Autowired
-    private EntityManager entityManager;
-
     @Override
     public BigDecimal calculateBalanceFor(Wallet wallet){
         BigDecimal result = walletTransactionRepository.getBalance(wallet);
