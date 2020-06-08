@@ -76,30 +76,6 @@ public class CryptoCompareServiceImpl implements CryptoCompareService {
         fetchCoinPrices();
     }
 
-    public Map<String, BigDecimal> resolveCoinPairPrices(Collection<String> fromSyms, Collection<String> toSyms) {
-        Assert.notNull(fromSyms, "parameter fromSyms cannot be null.");
-        Assert.notNull(toSyms, "parameter toSyms cannot be null.");
-
-        //build cache key set from input
-        Set<String> keys = new HashSet<>();
-        fromSyms.forEach(from -> toSyms.forEach(to -> {
-            if(!from.equalsIgnoreCase(to)) {
-                keys.add(getCacheKey(from, to));
-            }
-        }));
-
-        //check if we have all the values cached
-        Map<String, BigDecimal> cachedPrices = priceCache.getAllPresent(keys);
-        if (cachedPrices.size() != keys.size()) {
-            //if we don't have all the values, we might as well pull the most recent values into the cache for all of them
-            log.debug("Not all requested symbols were cached, retrieving from CryptoCompare API.");
-            retrieveAndCacheValues(fromSyms, toSyms);
-            cachedPrices = priceCache.getAllPresent(keys);
-        }
-
-        return cachedPrices;
-    }
-
     public BigDecimal resolveCoinPairPrice(String from, String to) throws CryptoCompareError {
         Assert.notNull(from, "parameter from cannot be null.");
         Assert.notNull(to, "parameter to cannot be null.");
@@ -135,13 +111,6 @@ public class CryptoCompareServiceImpl implements CryptoCompareService {
         return result;
     }
 
-    /**
-     * generate a cache key for use with this service. This key is the representation of data described by a currency
-     * pair.
-     * @param from currency symbol
-     * @param to currency symbol
-     * @return an object representing the cache key this service uses
-     */
     public String getCacheKey(String from, String to){
         return String.format("%s->%s",from, to);
     }

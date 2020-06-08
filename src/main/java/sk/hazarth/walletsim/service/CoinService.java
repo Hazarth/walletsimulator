@@ -1,39 +1,38 @@
 package sk.hazarth.walletsim.service;
 
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.stereotype.Service;
 import sk.hazarth.walletsim.domain.Coin;
 import sk.hazarth.walletsim.dto.CoinDTO;
 import sk.hazarth.walletsim.exception.CoinNotFound;
-import sk.hazarth.walletsim.mapper.CoinMapper;
-import sk.hazarth.walletsim.repository.CoinRepository;
 
-import javax.transaction.Transactional;
+/**
+ * An interface describing functionality necessary for a CoinService
+ */
+public interface CoinService {
 
-@Slf4j
-@Service
-@Transactional
-public class CoinService {
+    /**
+     * Retrieve a paginated result of available cryptocurrency coins in the form
+     * of a {@link Page<CoinDTO>}.
+     * @param pageable pagination details
+     * @return {@link Page<CoinDTO>}
+     */
+    Page<CoinDTO> getPage(Pageable pageable);
 
-    @Autowired
-    private CoinRepository coinRepository;
+    /**
+     * Get a single entity instance of {@link Coin}by its ID if it exists, exception is thrown otherwise
+     * @param id id of the coin
+     * @return {@link Coin} entity
+     * @throws CoinNotFound
+     */
+    Coin getCoin(Long id) throws CoinNotFound;
 
-    @Autowired
-    private CoinMapper coinMapper;
-
-    public Page<CoinDTO> getPage(Pageable pageable, String to) {
-        return coinRepository.findAll(pageable).map(coinMapper::toDto);
-    }
-
-    public Coin getCoin(Long id) throws CoinNotFound {
-        return coinRepository.findById(id).orElseThrow(() -> new CoinNotFound(id));
-    }
-
-    public Coin getCoin(String symbol) throws CoinNotFound {
-        return coinRepository.findOneBySymbol(symbol).orElseThrow(() -> new CoinNotFound(symbol));
-    }
+    /**
+     * Get a single entity instance of {@link Coin} by its symbol if it exists, exception is thrown otherwise
+     * @param symbol the currency symbol
+     * @return {@link Coin} entity
+     * @throws CoinNotFound
+     */
+    Coin getCoin(String symbol) throws CoinNotFound;
 
 }

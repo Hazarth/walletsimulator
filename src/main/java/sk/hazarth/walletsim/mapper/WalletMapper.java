@@ -5,13 +5,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import sk.hazarth.walletsim.domain.Wallet;
 import sk.hazarth.walletsim.dto.WalletCreateDTO;
 import sk.hazarth.walletsim.dto.WalletDTO;
-import sk.hazarth.walletsim.service.WalletTransactionService;
+import sk.hazarth.walletsim.service.impl.WalletTransactionServiceImpl;
 
 @Mapper(componentModel = "spring")
 public abstract class WalletMapper {
 
     @Autowired
-    private WalletTransactionService walletTransactionService;
+    private WalletTransactionServiceImpl walletTransactionServiceImpl;
 
     @Mapping(target = "uuid", ignore = true)
     abstract public Wallet fromCreateDto(WalletCreateDTO dto);
@@ -25,7 +25,7 @@ public abstract class WalletMapper {
 
     @AfterMapping
     public void afterMapping(Wallet wallet, @MappingTarget WalletDTO walletDTO){
-        walletDTO.setBalance(walletTransactionService.calculateBalanceFor(wallet));
+        walletDTO.setBalance(walletTransactionServiceImpl.calculateBalanceFor(wallet));
     }
 
 }

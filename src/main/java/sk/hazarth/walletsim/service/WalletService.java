@@ -1,47 +1,19 @@
 package sk.hazarth.walletsim.service;
 
-import lombok.extern.log4j.Log4j2;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Service;
-import sk.hazarth.walletsim.domain.TransactionType;
 import sk.hazarth.walletsim.domain.Wallet;
 import sk.hazarth.walletsim.dto.PurchaseDTO;
 import sk.hazarth.walletsim.dto.TransferDTO;
 import sk.hazarth.walletsim.dto.WalletCreateDTO;
 import sk.hazarth.walletsim.dto.WalletDTO;
 import sk.hazarth.walletsim.exception.*;
-import sk.hazarth.walletsim.mapper.WalletMapper;
-import sk.hazarth.walletsim.repository.WalletRepository;
 
-import javax.transaction.Transactional;
 import javax.validation.Valid;
-import java.math.BigDecimal;
-import java.util.Optional;
 import java.util.UUID;
 
 /**
- * Manages {@link Wallet} CRUD operations
+ * Interface describing necessary actions of a WalletService
  */
-@Log4j2
-@Service
-@Transactional
-public class WalletService {
-
-    @Autowired
-    private CryptoCompareService cryptoCompareService;
-
-    @Autowired
-    private WalletRepository walletRepository;
-
-    @Autowired
-    private WalletMapper walletMapper;
-
-    @Autowired
-    private WalletTransactionService walletTransactionService;
-
-    @Autowired
-    private CoinService coinService;
-
+public interface WalletService {
     /**
      * Creates a new wallet given the provided {@link WalletDTO}
      * @param dto dto containing necessary fileds to create a new wallet
@@ -49,13 +21,7 @@ public class WalletService {
      * @throws FriendlyNameAlreadyExists
      * @throws CoinNotFound
      */
-    public Wallet createWallet(WalletCreateDTO dto) throws FriendlyNameAlreadyExists, CoinNotFound {
-        validateDto(dto);
-        Wallet newWallet = walletMapper.fromCreateDto(dto);
-        newWallet.setCoin(coinService.getCoin(dto.getCoinSymbol()));
-
-        return walletRepository.save(newWallet);
-    }
+    Wallet createWallet(WalletCreateDTO dto) throws FriendlyNameAlreadyExists, CoinNotFound;
 
     /**
      * Retrieves a single {@link Wallet} instance if it exists, throws an {@link WalletNotFound} exception otherwise
@@ -63,9 +29,7 @@ public class WalletService {
      * @return an existing {@link Wallet} instance
      * @throws WalletNotFound
      */
-    public Wallet getWallet(UUID uuid) throws WalletNotFound {
-        return walletRepository.findById(uuid).orElseThrow(() -> new WalletNotFound(uuid.toString()));
-    }
+    Wallet getWallet(UUID uuid) throws WalletNotFound;
 
     /**
      * Retrieves a single {@link Wallet} instance by its friendly name if it exists, throws an {@link WalletNotFound} exception otherwise
@@ -73,9 +37,7 @@ public class WalletService {
      * @return an existing {@link Wallet} instance
      * @throws WalletNotFound
      */
-    public Wallet findByFriendlyName(String friendlyName) throws WalletNotFound {
-        return walletRepository.findOneByFriendlyName(friendlyName).orElseThrow(() -> new WalletNotFound(friendlyName));
-    }
+    Wallet findByFriendlyName(String friendlyName) throws WalletNotFound;
 
     /**
      * Updates a single {@link Wallet} instance if it exists, throws an {@link WalletNotFound} exception otherwise
@@ -84,11 +46,7 @@ public class WalletService {
      * @throws WalletNotFound
      * @throws FriendlyNameAlreadyExists
      */
-    public Wallet updateWallet(UUID uuid, WalletCreateDTO dto) throws WalletNotFound, FriendlyNameAlreadyExists {
-        validateDto(dto);
-        Wallet wallet = walletMapper.fromUpdateDto(dto, getWallet(uuid));
-        return walletRepository.save(wallet);
-    }
+    Wallet updateWallet(UUID uuid, WalletCreateDTO dto) throws WalletNotFound, FriendlyNameAlreadyExists;
 
     /**
      * soft deletes a {@link Wallet} if it exists, throws {@link WalletNotFound} exception otherwise.
@@ -96,49 +54,28 @@ public class WalletService {
      * @param uuid uuid of the {@link Wallet}
      * @throws WalletNotFound
      */
-    public void deleteWallet(UUID uuid) throws WalletNotFound {
-        Wallet wallet = getWallet(uuid);
-        wallet.setDeleted(true);
-        walletRepository.save(wallet);
-    }
+    void deleteWallet(UUID uuid) throws WalletNotFound;
 
-    public Wallet purchase(UUID destinationWalletUUID, @Valid PurchaseDTO purchaseDTO) throws AbstractException {
-        Wallet wallet = getWallet(destinationWalletUUID);
+    /**
+     * Deposits currency to the selected destination wallet using the specified amount of another currency.
+     *
+     * E.g.:
+     * Buy 500 Eur worth of BTC (dictated by the wallet)
+     * @param destinationWalletUUID the uuid of the destination {@link Wallet} entity
+     * @param purchaseDTO the transaction details
+     * @return returns an updated state of the destination {@link Wallet} entity
+     * @throws CryptoCompareError
+     * @throws WalletNotFound
+     */
+    Wallet purchase(UUID destinationWalletUUID, @Valid PurchaseDTO purchaseDTO) throws AbstractException;
 
-        BigDecimal price = cryptoCompareService.resolveCoinPairPrice(purchaseDTO.getCurrencySymbol(), wallet.getCoin().getSymbol());
-        walletTransactionService.createTransactionFor(wallet, TransactionType.DEPOSIT, purchaseDTO.getAmount().multiply(price));
-
-        return wallet;
-    }
-
-    public Wallet transfer(UUID source, @Valid TransferDTO transferDTO) throws AbstractException {
-        Wallet sourceWallet = getWallet(source);
-        Wallet destinationWallet = getWallet(transferDTO.getDestinationWallet());
-
-        BigDecimal sourceBalance = walletTransactionService.calculateBalanceFor(sourceWallet);
-
-        if(sourceBalance.compareTo(transferDTO.getAmount()) < 0){
-            throw new NotEnoughFunds(sourceWallet);
-        }
-
-        BigDecimal price = cryptoCompareService.resolveCoinPairPrice(
-                sourceWallet.getCoin().getSymbol(),
-                destinationWallet.getCoin().getSymbol());
-
-        BigDecimal destAmount = transferDTO.getAmount().multiply(price);
-
-        walletTransactionService.createTransactionFor(sourceWallet, TransactionType.WITHDRAWAL, transferDTO.getAmount());
-        walletTransactionService.createTransactionFor(destinationWallet, TransactionType.DEPOSIT, destAmount);
-
-        return sourceWallet;
-    }
-
-    private void validateDto(WalletCreateDTO dto) throws FriendlyNameAlreadyExists {
-        Optional<Wallet> existing = walletRepository.findOneByFriendlyName(dto.getFriendlyName());
-        if (existing.isPresent()) {
-            throw new FriendlyNameAlreadyExists(dto.getFriendlyName());
-        }
-
-
-    }
+    /**
+     * Transfers funds from the source wallet to the destination wallet.
+     * @param source the uuid of the source {@link Wallet} entity.
+     * @param transferDTO the transaction details holding the destination and amount of currency to transfer
+     * @return new state of the destination {@link Wallet} entity.
+     * @throws CryptoCompareError
+     * @throws WalletNotFound
+     */
+    Wallet transfer(UUID source, @Valid TransferDTO transferDTO) throws AbstractException;
 }
