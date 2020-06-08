@@ -5,7 +5,17 @@ import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
 
+/**
+ * Provides additional tools useful for working with the CryptoCompare API
+ */
 public class CryptoCompareHelper {
+
+    /**
+     * Hides public constructor
+     */
+    private CryptoCompareHelper(){
+
+    }
 
     /**
      * Crypto compare API has an upper limit of *characters* for some input parameters. This function partitions a
