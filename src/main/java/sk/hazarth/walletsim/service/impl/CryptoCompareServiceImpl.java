@@ -115,53 +115,29 @@ public class CryptoCompareServiceImpl implements CryptoCompareService {
         return String.format("%s->%s",from, to);
     }
 
-    private void retrieveAndCacheValues(Collection<String> fSyms, Collection<String> tSyms){
-        if (fSyms == null || tSyms == null) {
-            log.warn("Collection {} was null while retrieving values.", fSyms == null ? "fSyms" : "tSyms");
-        }else{
-
-            //partition the input parameters to match CryptoCompare API requirements
-            List<Collection<String>> fSymsPartitions = CryptoCompareHelper.partitionParamCollection(fSyms, 300);
-            List<Collection<String>> tSymsPartitions = CryptoCompareHelper.partitionParamCollection(tSyms, 100);
-
-            for(Collection<String> fromPartition : fSymsPartitions){
-                for(Collection<String> toPartition : tSymsPartitions){
-                    //TODO: check response code and log (don't throw)
-                    Map<String, Map<String, BigDecimal>> results = cryptoCompareClient.multiSymbolPrice(fromPartition,toPartition).getBody();
-
-                    if(results != null){
-                        results.forEach((from, value) -> value.forEach((to, price) -> {
-                            if(!from.equalsIgnoreCase(to)) {
-                                String cacheKey = getCacheKey(from, to);
-                                priceCache.put(cacheKey, price);
-                            }
-                        }));
-                    }
-                }
-            }
-
-        }
-    }
-
     /**
      * Keeps the most recently used pairs up-to-date for better user experience
      */
-    @Scheduled(fixedDelayString = "#{ ${wallet-sim.cache-expiration:60000} }")
+    @Scheduled(fixedDelayString = "#{ ${wallet-sim.fetch-cache:60000} }")
     void fetchCoinPrices() {
 
         Map<String, Coin> map = coinRepository.findAll().stream().collect(Collectors.toMap(Coin::getSymbol, Function.identity()));
 
         for(Collection<String> partition : CryptoCompareHelper.partitionParamCollection(map.keySet(), 300)){
-            Map<String, Map<String, BigDecimal>> results = cryptoCompareClient.multiSymbolPrice(partition,Collections.singleton(appCurrency)).getBody();
+            ResponseEntity<Map<String, Map<String, BigDecimal>>> results = cryptoCompareClient.multiSymbolPrice(partition,Collections.singleton(appCurrency));
 
-            if(results != null) {
-                results.forEach((from, value) -> {
-                    BigDecimal price = value.get(appCurrency);
-                    map.get(from).setPriceUSD(price);
+            if(results.getStatusCode() == HttpStatus.OK) {
+                if (results.getBody() != null) {
+                    results.getBody().forEach((from, value) -> {
+                        BigDecimal price = value.get(appCurrency);
+                        map.get(from).setPriceUSD(price);
 
-                    String cacheKey = getCacheKey(from, appCurrency);
-                    priceCache.put(cacheKey, price);
-                });
+                        String cacheKey = getCacheKey(from, appCurrency);
+                        priceCache.put(cacheKey, price);
+                    });
+                }
+            }else {
+                log.error("An error occurred while fetching CryptoCompare API values: {}", results.toString());
             }
 
         }
